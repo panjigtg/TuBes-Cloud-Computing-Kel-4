@@ -50,6 +50,8 @@ Mahasiswa/pengguna sering membutuhkan informasi cepat tentang bengkel terdekat. 
 
 ## Chosen Stack
 
+Dokumen ini mengadaptasi konsep umum **Android Map Directory** pada PDF menjadi domain khusus: **Direktori Bengkel**.
+
 ### Mobile App
 
 - **React Native** + **Expo** (atau bisa Kotlin/Java/Flutter)
@@ -60,7 +62,7 @@ Mahasiswa/pengguna sering membutuhkan informasi cepat tentang bengkel terdekat. 
 
 ### Backend API
 
-- **Node.js** + **Express** (atau Flask, Laravel, FastAPI)
+- **Node.js** + **Express**
   - REST endpoints untuk CRUD bengkel
   - JSON response
   - Error handling
@@ -68,12 +70,14 @@ Mahasiswa/pengguna sering membutuhkan informasi cepat tentang bengkel terdekat. 
 
 ### Database
 
-- **Firebase Firestore** (atau PostgreSQL, MySQL, MongoDB)
+- **Supabase PostgreSQL**
   - Collections/Tables: categories, places, reviews
+  - Credential database hanya disimpan di backend, bukan di aplikasi mobile
 
 ### Cloud Deployment
 
-- **Firebase Hosting** / **Render** / **Heroku** / **Railway** / **Vercel** (untuk API)
+- **Render Free** untuk deploy backend API
+- **Supabase Free** untuk database
   - Backend HARUS online dan accessible dari internet
 
 ### Map & Routing
@@ -214,7 +218,7 @@ Mahasiswa baru mencari bengkel motor terdekat → lihat daftar dengan jarak → 
 
 ## Architecture Clean Code Structure
 
-Untuk React Native + Express backend:
+Untuk React Native + Express + Supabase:
 
 ```
 / (repo root)
@@ -232,13 +236,12 @@ Untuk React Native + Express backend:
 ├─ backend/                 # Express API server
 │  ├─ routes/              # /api/places, /api/categories
 │  ├─ controllers/         # business logic
-│  ├─ models/              # place, category schema
 │  ├─ middleware/          # validation, error handling
-│  ├─ db/                  # database connection, migrations
+│  ├─ db/                  # koneksi Supabase
 │  ├─ server.js            # entry point
 │  └─ package.json
 │
-├─ database/               # SQL migration files atau Firebase config
+├─ database/               # SQL schema / seed untuk Supabase
 │
 └─ README.md
 ```
