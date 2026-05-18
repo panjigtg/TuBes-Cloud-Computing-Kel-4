@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3022;
 app.use(cors());
 app.use(express.json());
 
-app.get("/api/salah", (_req, res) => {
+app.use("/api/salah", (_req, res) => {
   res.status(404).json({
     message: "path tidak ditemukan",
   });
