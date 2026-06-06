@@ -2,22 +2,16 @@ function validatePlace(req, res, next) {
   const {
     category_id,
     name,
-    address,
     latitude,
     longitude,
-    opening_time,
-    closing_time,
   } = req.body;
 
   const missingFields = [];
 
   if (!category_id) missingFields.push("category_id");
   if (!name) missingFields.push("name");
-  if (!address) missingFields.push("address");
   if (latitude === undefined) missingFields.push("latitude");
   if (longitude === undefined) missingFields.push("longitude");
-  if (!opening_time) missingFields.push("opening_time");
-  if (!closing_time) missingFields.push("closing_time");
 
   if (missingFields.length > 0) {
     return res.status(400).json({

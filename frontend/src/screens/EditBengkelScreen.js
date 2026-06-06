@@ -18,6 +18,7 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase } from '../lib/supabase';
+import { fetchCategories as apiFetchCategories, updatePlace as apiUpdatePlace } from '../services/api';
 import { getCategoryIcon, getCategoryColor } from '../utils/icons';
 import { colors, radius, shadow, mapStyle } from '../theme';
 
@@ -35,6 +36,10 @@ export default function EditBengkelScreen({ route, navigation }) {
   // ── Form state (pre-filled) ───────────────────────────────────────────────
   const [name, setName]               = useState(place.name ?? '');
   const [description, setDescription] = useState(place.description ?? '');
+  const [address, setAddress]         = useState(place.address ?? '');
+  const [phone, setPhone]             = useState(place.phone ?? '');
+  const [openingTime, setOpeningTime] = useState(place.opening_time ? place.opening_time.substring(0, 5) : '08:00');
+  const [closingTime, setClosingTime] = useState(place.closing_time ? place.closing_time.substring(0, 5) : '17:00');
   const [selectedCategory, setSelectedCategory] = useState(place.category_id ?? null);
   const [imageUri, setImageUri]       = useState(null);       // null = keep existing
   const [pickedLocation, setPickedLocation] = useState({
@@ -48,12 +53,12 @@ export default function EditBengkelScreen({ route, navigation }) {
 
   // Fetch categories once
   React.useEffect(() => {
-    supabase.from('categories').select('*').then(({ data, error }) => {
-      if (!error && data) {
+    apiFetchCategories().then((data) => {
+      if (data) {
         setCategories(data);
         setCategoriesLoaded(true);
       }
-    });
+    }).catch((err) => console.warn('Gagal fetch categories:', err.message));
   }, []);
 
   // ── Image picker ──────────────────────────────────────────────────────────
@@ -129,20 +134,23 @@ export default function EditBengkelScreen({ route, navigation }) {
         photoUrl = urlData.publicUrl;
       }
 
-      const { error } = await supabase
-        .from('places')
-        .update({
-          name: name.trim(),
-          description: description.trim() || null,
-          category_id: selectedCategory,
-          latitude: pickedLocation.latitude,
-          longitude: pickedLocation.longitude,
-          photo_url: photoUrl,
-        })
-        .eq('id', place.id);
+      const updateData = {
+        name: name.trim(),
+        description: description.trim() || null,
+        address: address.trim() || null,
+        phone: phone.trim() || null,
+        opening_time: openingTime || '08:00',
+        closing_time: closingTime || '17:00',
+        category_id: selectedCategory,
+        latitude: pickedLocation.latitude,
+        longitude: pickedLocation.longitude,
+        photo_url: photoUrl,
+      };
 
-      if (error) {
-        Alert.alert('Error', 'Gagal menyimpan perubahan: ' + error.message);
+      try {
+        await apiUpdatePlace(place.id, updateData);
+      } catch (err) {
+        Alert.alert('Error', 'Gagal menyimpan perubahan: ' + err.message);
         setLoading(false);
         return;
       }
@@ -262,6 +270,65 @@ export default function EditBengkelScreen({ route, navigation }) {
                 </Text>
               </TouchableOpacity>
             ))}
+          </View>
+        </View>
+
+        {/* Address */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Alamat</Text>
+          <View style={styles.inputContainer}>
+            <MaterialCommunityIcons name="map-marker" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Jl. Contoh No.123, Kota"
+              placeholderTextColor={colors.textMuted}
+              value={address}
+              onChangeText={setAddress}
+            />
+          </View>
+        </View>
+
+        {/* Phone */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>No. Telepon</Text>
+          <View style={styles.inputContainer}>
+            <MaterialCommunityIcons name="phone" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="081234567890"
+              placeholderTextColor={colors.textMuted}
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+            />
+          </View>
+        </View>
+
+        {/* Opening Hours */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Jam Operasional</Text>
+          <View style={styles.hoursRow}>
+            <View style={[styles.inputContainer, styles.hourInput]}>
+              <MaterialCommunityIcons name="clock-start" size={18} color={colors.textSecondary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="08:00"
+                placeholderTextColor={colors.textMuted}
+                value={openingTime}
+                onChangeText={setOpeningTime}
+              />
+            </View>
+            <Text style={styles.hoursSeparator}>—</Text>
+            <View style={[styles.inputContainer, styles.hourInput]}>
+              <MaterialCommunityIcons name="clock-end" size={18} color={colors.textSecondary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="17:00"
+                placeholderTextColor={colors.textMuted}
+                value={closingTime}
+                onChangeText={setClosingTime}
+              />
+            </View>
           </View>
         </View>
 
@@ -517,5 +584,20 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     marginLeft: 8,
+  },
+
+  // ── Hours input ──────────────────────────────────────────────────────────
+  hoursRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  hourInput: {
+    flex: 1,
+  },
+  hoursSeparator: {
+    color: colors.textMuted,
+    fontSize: 18,
+    marginHorizontal: 10,
+    fontWeight: '600',
   },
 });

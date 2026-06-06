@@ -19,6 +19,7 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase } from '../lib/supabase';
+import { fetchPlaces as apiFetchPlaces, fetchCategories as apiFetchCategories, createPlace as apiCreatePlace, deletePlace as apiDeletePlace } from '../services/api';
 import { getCategoryIcon, getCategoryColor } from '../utils/icons';
 import { colors, radius, shadow, mapStyle } from '../theme';
 
@@ -28,6 +29,10 @@ export default function AdminDashboardScreen({ navigation }) {
   // ── Form state ────────────────────────────────────────────────────────────
   const [name, setName]               = useState('');
   const [description, setDescription] = useState('');
+  const [address, setAddress]         = useState('');
+  const [phone, setPhone]             = useState('');
+  const [openingTime, setOpeningTime] = useState('08:00');
+  const [closingTime, setClosingTime] = useState('17:00');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [imageUri, setImageUri]       = useState(null);
   const [pickedLocation, setPickedLocation] = useState(null); // { latitude, longitude }
@@ -45,16 +50,26 @@ export default function AdminDashboardScreen({ navigation }) {
   }, []);
 
   const fetchCategories = async () => {
-    const { data, error } = await supabase.from('categories').select('*');
-    if (!error && data) setCategories(data);
+    try {
+      const data = await apiFetchCategories();
+      if (data) setCategories(data);
+    } catch (err) {
+      console.warn('Gagal fetch categories:', err.message);
+    }
   };
 
   const fetchPlaces = async () => {
-    const { data, error } = await supabase
-      .from('places')
-      .select('*, categories(name, icon_name)')
-      .order('created_at', { ascending: false });
-    if (!error && data) setPlaces(data);
+    try {
+      const data = await apiFetchPlaces();
+      // Re-nest for compatibility with existing card rendering
+      const normalized = (data ?? []).map((p) => ({
+        ...p,
+        categories: { name: p.category_name, icon_name: p.icon_name },
+      }));
+      setPlaces(normalized);
+    } catch (err) {
+      console.warn('Gagal fetch places:', err.message);
+    }
   };
 
   // ── Image picker ──────────────────────────────────────────────────────────
@@ -129,14 +144,18 @@ export default function AdminDashboardScreen({ navigation }) {
         photoUrl = urlData.publicUrl;
       }
 
-      const { error } = await supabase.from('places').insert({
+      const { error } = await apiCreatePlace({
         name: name.trim(),
         description: description.trim() || null,
+        address: address.trim() || null,
+        phone: phone.trim() || null,
+        opening_time: openingTime || '08:00',
+        closing_time: closingTime || '17:00',
         category_id: selectedCategory,
         latitude: pickedLocation.latitude,
         longitude: pickedLocation.longitude,
         photo_url: photoUrl,
-      });
+      }).then(() => ({ error: null })).catch((e) => ({ error: e }));
 
       if (error) {
         Alert.alert('Error', 'Gagal menyimpan data: ' + error.message);
@@ -157,6 +176,10 @@ export default function AdminDashboardScreen({ navigation }) {
   const resetForm = () => {
     setName('');
     setDescription('');
+    setAddress('');
+    setPhone('');
+    setOpeningTime('08:00');
+    setClosingTime('17:00');
     setSelectedCategory(null);
     setImageUri(null);
     setPickedLocation(null);
@@ -173,11 +196,11 @@ export default function AdminDashboardScreen({ navigation }) {
           text: 'Hapus',
           style: 'destructive',
           onPress: async () => {
-            const { error } = await supabase.from('places').delete().eq('id', placeId);
-            if (!error) {
+            try {
+              await apiDeletePlace(placeId);
               fetchPlaces();
-            } else {
-              Alert.alert('Error', 'Gagal menghapus: ' + error.message);
+            } catch (err) {
+              Alert.alert('Error', 'Gagal menghapus: ' + err.message);
             }
           },
         },
@@ -303,6 +326,65 @@ export default function AdminDashboardScreen({ navigation }) {
                   </Text>
                 </TouchableOpacity>
               ))}
+            </View>
+          </View>
+
+          {/* Address */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Alamat</Text>
+            <View style={styles.inputContainer}>
+              <MaterialCommunityIcons name="map-marker" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Jl. Contoh No.123, Kota"
+                placeholderTextColor={colors.textMuted}
+                value={address}
+                onChangeText={setAddress}
+              />
+            </View>
+          </View>
+
+          {/* Phone */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>No. Telepon</Text>
+            <View style={styles.inputContainer}>
+              <MaterialCommunityIcons name="phone" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="081234567890"
+                placeholderTextColor={colors.textMuted}
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+              />
+            </View>
+          </View>
+
+          {/* Opening Hours */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Jam Operasional</Text>
+            <View style={styles.hoursRow}>
+              <View style={[styles.inputContainer, styles.hourInput]}>
+                <MaterialCommunityIcons name="clock-start" size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="08:00"
+                  placeholderTextColor={colors.textMuted}
+                  value={openingTime}
+                  onChangeText={setOpeningTime}
+                />
+              </View>
+              <Text style={styles.hoursSeparator}>—</Text>
+              <View style={[styles.inputContainer, styles.hourInput]}>
+                <MaterialCommunityIcons name="clock-end" size={18} color={colors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="17:00"
+                  placeholderTextColor={colors.textMuted}
+                  value={closingTime}
+                  onChangeText={setClosingTime}
+                />
+              </View>
             </View>
           </View>
 
@@ -708,4 +790,19 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   actionBtn: { padding: 8 },
+
+  // ── Hours input ──────────────────────────────────────────────────────────
+  hoursRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  hourInput: {
+    flex: 1,
+  },
+  hoursSeparator: {
+    color: colors.textMuted,
+    fontSize: 18,
+    marginHorizontal: 10,
+    fontWeight: '600',
+  },
 });

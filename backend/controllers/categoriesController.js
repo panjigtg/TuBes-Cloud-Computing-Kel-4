@@ -4,17 +4,14 @@ async function getCategories(_req, res, next) {
   try {
     const { data, error } = await supabase
       .from("categories")
-      .select("id, name")
+      .select("id, name, icon_name")
       .order("name", { ascending: true });
 
     if (error) {
       throw error;
     }
 
-    res.status(200).json({
-      status: "success",
-      data
-    });
+    res.json(data);
   } catch (error) {
     next(error);
   }
@@ -29,29 +26,25 @@ async function addCategories(req, res, next) {
       .single();
 
     if (existing) {
-      return res.status(409).json({ 
-        status: "error",
-        message: "Category already exists"
-       });
+      return res.status(409).json({
+        message: "Category already exists",
+      });
     }
 
     const { data, error } = await supabase
       .from("categories")
       .insert({
-        name:req.body.name,
-        icon:req.body.icon
+        name: req.body.name,
+        icon_name: req.body.icon_name,
       })
-      .select()
+      .select("id, name, icon_name")
       .single();
 
     if (error) {
       throw error;
     }
 
-    res.status(201).json({
-      status: "success",
-      data
-    });
+    res.status(201).json(data);
   } catch (error) {
     next(error);
   }
@@ -61,14 +54,13 @@ async function getCategoryById(req, res, next) {
   try {
     const { data, error } = await supabase
       .from("categories")
-      .select("id, name, icon")
+      .select("id, name, icon_name")
       .eq("id", req.params.id)
       .single();
 
     if (error) {
       if (error.code === "PGRST116") {
         return res.status(404).json({
-          status: "error",
           message: "Category not found",
         });
       }
@@ -76,15 +68,11 @@ async function getCategoryById(req, res, next) {
       throw error;
     }
 
-    res.status(200).json({
-      status: "success",
-      data,
-    });
+    res.json(data);
   } catch (error) {
     next(error);
   }
 }
-
 
 module.exports = {
   getCategories,

@@ -10,6 +10,7 @@ import {
   Dimensions,
   Platform,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -66,6 +67,32 @@ export default function DetailScreen({ route, navigation }) {
     navigation.navigate('Navigation', { place, userLocation });
   };
 
+  const openInGoogleMaps = () => {
+    if (place.google_maps_url) {
+      Linking.openURL(place.google_maps_url);
+    } else {
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`;
+      Linking.openURL(url);
+    }
+  };
+
+  const callPhone = () => {
+    if (place.phone) {
+      Linking.openURL(`tel:${place.phone}`);
+    }
+  };
+
+  // Format opening hours
+  const formatTime = (time) => {
+    if (!time) return null;
+    // time could be "08:00:00" or "08:00"
+    return time.substring(0, 5);
+  };
+
+  const openTime = formatTime(place.opening_time);
+  const closeTime = formatTime(place.closing_time);
+  const hasHours = openTime && closeTime;
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
@@ -108,9 +135,15 @@ export default function DetailScreen({ route, navigation }) {
                   color={categoryColor}
                 />
                 <Text style={[styles.categoryText, { color: categoryColor }]}>
-                  {place.categories?.name || 'Lainnya'}
+                  {place.categories?.name || place.category_name || 'Lainnya'}
                 </Text>
               </View>
+              {place.rating != null && (
+                <View style={styles.ratingBadge}>
+                  <MaterialCommunityIcons name="star" size={14} color="#F59E0B" />
+                  <Text style={styles.ratingText}>{Number(place.rating).toFixed(1)}</Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -131,11 +164,57 @@ export default function DetailScreen({ route, navigation }) {
               <Text style={styles.statLabel}>Est. Waktu</Text>
             </View>
             <View style={styles.statCard}>
-              <MaterialCommunityIcons name={categoryIcon} size={24} color={categoryColor} />
+              <MaterialCommunityIcons name="clock-time-eight-outline" size={24} color={colors.warning} />
               <Text style={styles.statValue} numberOfLines={1}>
-                {place.categories?.name?.split(' ')[1] || 'Umum'}
+                {hasHours ? `${openTime}` : '-'}
               </Text>
-              <Text style={styles.statLabel}>Kategori</Text>
+              <Text style={styles.statLabel}>{hasHours ? `s/d ${closeTime}` : 'Jam Buka'}</Text>
+            </View>
+          </View>
+
+          {/* Info Section — Address, Phone, Hours */}
+          <View style={styles.infoSection}>
+            <Text style={styles.sectionTitle}>Informasi Bengkel</Text>
+            <View style={styles.infoCard}>
+              {/* Address */}
+              {place.address ? (
+                <View style={styles.infoRow}>
+                  <MaterialCommunityIcons name="map-marker" size={20} color={colors.primary} />
+                  <Text style={styles.infoText}>{place.address}</Text>
+                </View>
+              ) : null}
+
+              {/* Phone */}
+              {place.phone ? (
+                <TouchableOpacity style={styles.infoRow} onPress={callPhone}>
+                  <MaterialCommunityIcons name="phone" size={20} color={colors.success} />
+                  <Text style={[styles.infoText, styles.infoLink]}>{place.phone}</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {/* Opening Hours */}
+              {hasHours ? (
+                <View style={styles.infoRow}>
+                  <MaterialCommunityIcons name="clock-outline" size={20} color={colors.warning} />
+                  <Text style={styles.infoText}>{openTime} — {closeTime}</Text>
+                </View>
+              ) : null}
+
+              {/* Google Maps Link */}
+              <TouchableOpacity style={styles.infoRow} onPress={openInGoogleMaps}>
+                <MaterialCommunityIcons name="google-maps" size={20} color="#4285F4" />
+                <Text style={[styles.infoText, styles.infoLink]}>Buka di Google Maps</Text>
+              </TouchableOpacity>
+
+              {/* No info fallback */}
+              {!place.address && !place.phone && !hasHours && (
+                <View style={styles.infoRow}>
+                  <MaterialCommunityIcons name="information-outline" size={20} color={colors.textMuted} />
+                  <Text style={[styles.infoText, { color: colors.textMuted }]}>
+                    Informasi lengkap belum tersedia
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -209,8 +288,15 @@ export default function DetailScreen({ route, navigation }) {
         </View>
       </ScrollView>
 
-      {/* Navigation Button */}
+      {/* Bottom Bar — Two buttons */}
       <View style={styles.bottomBar}>
+        <TouchableOpacity
+          style={styles.gmapsButton}
+          onPress={openInGoogleMaps}
+          activeOpacity={0.8}
+        >
+          <MaterialCommunityIcons name="google-maps" size={22} color={colors.primary} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.routeButton, !userLocation && styles.routeButtonDisabled]}
           onPress={startNavigation}
@@ -264,7 +350,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 20,
     paddingTop: 24,
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   titleSection: {
     marginBottom: 20,
@@ -277,7 +363,9 @@ const styles = StyleSheet.create({
   },
   categoryRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 10,
+    gap: 8,
   },
   categoryBadge: {
     flexDirection: 'row',
@@ -290,6 +378,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 6,
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.md,
+    gap: 4,
+  },
+  ratingText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#B45309',
   },
   statsRow: {
     flexDirection: 'row',
@@ -317,7 +419,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
-  descriptionSection: {
+
+  // ── Info Section ───────────────────────────────────────────────────────────
+  infoSection: {
     marginBottom: 24,
   },
   sectionTitle: {
@@ -325,6 +429,34 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 12,
+  },
+  infoCard: {
+    backgroundColor: colors.bgSurface,
+    borderRadius: radius.lg,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    gap: 14,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  infoText: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginLeft: 12,
+  },
+  infoLink: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+
+  // ── Description ────────────────────────────────────────────────────────────
+  descriptionSection: {
+    marginBottom: 24,
   },
   descriptionCard: {
     backgroundColor: colors.bgSurface,
@@ -338,6 +470,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 24,
   },
+
+  // ── Route Preview ──────────────────────────────────────────────────────────
   routeSection: {
     marginBottom: 24,
   },
@@ -371,6 +505,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.white,
   },
+
+  // ── Location ───────────────────────────────────────────────────────────────
   locationSection: {
     marginBottom: 24,
   },
@@ -391,6 +527,8 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
+
+  // ── Bottom Bar ─────────────────────────────────────────────────────────────
   bottomBar: {
     position: 'absolute',
     bottom: 0,
@@ -402,8 +540,22 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 34 : 16,
     borderTopWidth: 1,
     borderTopColor: colors.borderSubtle,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  gmapsButton: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bgSurface,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   routeButton: {
+    flex: 1,
     backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',

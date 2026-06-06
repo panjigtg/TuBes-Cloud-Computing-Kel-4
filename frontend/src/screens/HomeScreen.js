@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { supabase } from '../lib/supabase';
+import { fetchPlaces as apiFetchPlaces, fetchCategories as apiFetchCategories } from '../services/api';
 import { getDistanceFromLatLonInMeters, formatDistance } from '../utils/distance';
 import { getCategoryIcon, getCategoryColor } from '../utils/icons';
 import { colors, radius, shadow, mapStyle } from '../theme';
@@ -157,15 +157,26 @@ export default function HomeScreen({ navigation }) {
   };
 
   const fetchCategories = async () => {
-    const { data, error } = await supabase.from('categories').select('*');
-    if (!error && data) setCategories(data ?? []);
+    try {
+      const data = await apiFetchCategories();
+      setCategories(data ?? []);
+    } catch (err) {
+      console.warn('Gagal fetch categories:', err.message);
+    }
   };
 
   const fetchPlaces = async () => {
-    const { data, error } = await supabase
-      .from('places')
-      .select('*, categories(name, icon_name)');
-    if (!error && data) setPlaces(data ?? []);
+    try {
+      const data = await apiFetchPlaces();
+      // Re-nest flat API fields into categories object for component compatibility
+      const normalized = (data ?? []).map((p) => ({
+        ...p,
+        categories: { name: p.category_name, icon_name: p.icon_name },
+      }));
+      setPlaces(normalized);
+    } catch (err) {
+      console.warn('Gagal fetch places:', err.message);
+    }
   };
 
   // ─── Derived ──────────────────────────────────────────────────────────────
