@@ -9,8 +9,8 @@
 
 import { Platform } from 'react-native';
 
-// Untuk HP fisik di WiFi yang sama, gunakan IP Mac langsung
-const API_BASE_URL = "http://192.168.1.148:3022/api";
+// Production (Vercel)
+const API_BASE_URL = "https://bengkelbrainrot.vercel.app/api";
 // Ganti dengan URL ini saat production (setelah deploy ke Render):
 // const API_BASE_URL = "https://your-render-url.onrender.com/api";
 
