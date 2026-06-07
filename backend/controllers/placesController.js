@@ -22,6 +22,21 @@ const EXTRA_COLUMNS = [
   "google_maps_url",
 ];
 
+const PLACE_WRITE_COLUMNS = [
+  "category_id",
+  "name",
+  "description",
+  "latitude",
+  "longitude",
+  "photo_url",
+  "address",
+  "phone",
+  "opening_time",
+  "closing_time",
+  "rating",
+  "google_maps_url",
+];
+
 // Cache: kolom mana saja yang tersedia di DB
 let availableColumns = null;
 
@@ -73,7 +88,13 @@ async function getPlaces(req, res, next) {
       .order("name", { ascending: true });
 
     if (categoryId) {
-      query = query.eq("category_id", categoryId);
+      const parsedCategoryId = parsePositiveInteger(categoryId);
+      if (!parsedCategoryId) {
+        return res.status(400).json({
+          message: "category harus berupa angka positif",
+        });
+      }
+      query = query.eq("category_id", parsedCategoryId);
     }
 
     const { data, error } = await query;
@@ -90,11 +111,18 @@ async function getPlaces(req, res, next) {
 
 async function getPlaceById(req, res, next) {
   try {
+    const placeId = parsePositiveInteger(req.params.id);
+    if (!placeId) {
+      return res.status(400).json({
+        message: "ID place tidak valid",
+      });
+    }
+
     const selectStr = await buildSelect();
     const { data, error } = await supabase
       .from("places")
       .select(selectStr)
-      .eq("id", req.params.id)
+      .eq("id", placeId)
       .single();
 
     if (error) {
@@ -112,14 +140,8 @@ async function getPlaceById(req, res, next) {
 
 async function createPlace(req, res, next) {
   try {
-    // Filter body to only include columns that exist
     const cols = await detectColumns();
-    const insertData = {};
-    for (const key of Object.keys(req.body)) {
-      if (cols.includes(key) || key === "category_id") {
-        insertData[key] = req.body[key];
-      }
-    }
+    const insertData = pickWritablePlaceFields(req.validatedBody ?? req.body, cols);
 
     const selectStr = await buildSelect();
     const { data, error } = await supabase
@@ -140,20 +162,27 @@ async function createPlace(req, res, next) {
 
 async function updatePlace(req, res, next) {
   try {
-    // Filter body to only include columns that exist
+    const placeId = parsePositiveInteger(req.params.id);
+    if (!placeId) {
+      return res.status(400).json({
+        message: "ID place tidak valid",
+      });
+    }
+
     const cols = await detectColumns();
-    const updateData = {};
-    for (const key of Object.keys(req.body)) {
-      if (cols.includes(key) || key === "category_id") {
-        updateData[key] = req.body[key];
-      }
+    const updateData = pickWritablePlaceFields(req.validatedBody ?? req.body, cols);
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        message: "Tidak ada field yang dapat diubah",
+      });
     }
 
     const selectStr = await buildSelect();
     const { data, error } = await supabase
       .from("places")
       .update(updateData)
-      .eq("id", req.params.id)
+      .eq("id", placeId)
       .select(selectStr)
       .single();
 
@@ -172,10 +201,34 @@ async function updatePlace(req, res, next) {
 
 async function deletePlace(req, res, next) {
   try {
+    const placeId = parsePositiveInteger(req.params.id);
+    if (!placeId) {
+      return res.status(400).json({
+        message: "ID place tidak valid",
+      });
+    }
+
+    const { data: existingPlace, error: findError } = await supabase
+      .from("places")
+      .select("id")
+      .eq("id", placeId)
+      .single();
+
+    if (findError) {
+      if (findError.code === "PGRST116") {
+        return res.status(404).json({ message: "Place tidak ditemukan" });
+      }
+      throw findError;
+    }
+
+    if (!existingPlace) {
+      return res.status(404).json({ message: "Place tidak ditemukan" });
+    }
+
     const { error } = await supabase
       .from("places")
       .delete()
-      .eq("id", req.params.id);
+      .eq("id", placeId);
 
     if (error) {
       throw error;
@@ -206,6 +259,27 @@ function formatPlace(place) {
     google_maps_url: place.google_maps_url ?? null,
     created_at: place.created_at,
   };
+}
+
+function parsePositiveInteger(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function pickWritablePlaceFields(body, availableDbColumns) {
+  const availableColumnSet = new Set(availableDbColumns);
+  const picked = {};
+
+  for (const field of PLACE_WRITE_COLUMNS) {
+    if (
+      Object.prototype.hasOwnProperty.call(body, field) &&
+      availableColumnSet.has(field)
+    ) {
+      picked[field] = body[field];
+    }
+  }
+
+  return picked;
 }
 
 module.exports = {

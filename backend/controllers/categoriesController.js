@@ -19,11 +19,16 @@ async function getCategories(_req, res, next) {
 
 async function addCategories(req, res, next) {
   try {
-    const { data: existing } = await supabase
+    const categoryData = req.validatedBody ?? req.body;
+    const { data: existing, error: findError } = await supabase
       .from("categories")
       .select("id")
-      .eq("name", req.body.name)
-      .single();
+      .eq("name", categoryData.name)
+      .maybeSingle();
+
+    if (findError) {
+      throw findError;
+    }
 
     if (existing) {
       return res.status(409).json({
@@ -34,8 +39,8 @@ async function addCategories(req, res, next) {
     const { data, error } = await supabase
       .from("categories")
       .insert({
-        name: req.body.name,
-        icon_name: req.body.icon_name,
+        name: categoryData.name,
+        icon_name: categoryData.icon_name,
       })
       .select("id, name, icon_name")
       .single();
@@ -52,10 +57,17 @@ async function addCategories(req, res, next) {
 
 async function getCategoryById(req, res, next) {
   try {
+    const categoryId = parsePositiveInteger(req.params.id);
+    if (!categoryId) {
+      return res.status(400).json({
+        message: "ID category tidak valid",
+      });
+    }
+
     const { data, error } = await supabase
       .from("categories")
       .select("id, name, icon_name")
-      .eq("id", req.params.id)
+      .eq("id", categoryId)
       .single();
 
     if (error) {
@@ -72,6 +84,11 @@ async function getCategoryById(req, res, next) {
   } catch (error) {
     next(error);
   }
+}
+
+function parsePositiveInteger(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 module.exports = {

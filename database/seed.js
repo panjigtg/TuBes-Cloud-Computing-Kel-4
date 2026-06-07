@@ -7,6 +7,7 @@
  *
  * Usage:
  *   cd database
+ *   # set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY first
  *   node seed.js
  */
 
@@ -15,9 +16,13 @@ const path = require("path");
 const { createClient } = require("@supabase/supabase-js");
 
 // ── Config ───────────────────────────────────────────────────────────────────
-const SUPABASE_URL = "https://pzoavdnqrqvvjibunnhk.supabase.co";
-const SUPABASE_SERVICE_ROLE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6b2F2ZG5xcnF2dmppYnVubmhrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDEzMzc4MywiZXhwIjoyMDk1NzA5NzgzfQ.MqfwgZr-Bk-sTka3hQmoCTeR4fiKim-bGGHXbq0OZXs";
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error("SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY wajib diisi dari environment variable.");
+  process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 

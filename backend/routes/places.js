@@ -7,14 +7,18 @@ const {
   updatePlace,
   deletePlace,
 } = require("../controllers/placesController");
-const validatePlace = require("../middleware/validatePlace");
+const requireAdmin = require("../middleware/requireAdmin");
+const {
+  validateCreatePlace,
+  validateUpdatePlace,
+} = require("../middleware/validatePlace");
 
 const router = express.Router();
 
 router.get("/", getPlaces);
 router.get("/:id", getPlaceById);
-router.post("/", validatePlace, createPlace);
-router.put("/:id", updatePlace);
-router.delete("/:id", deletePlace);
+router.post("/", requireAdmin, validateCreatePlace, createPlace);
+router.put("/:id", requireAdmin, validateUpdatePlace, updatePlace);
+router.delete("/:id", requireAdmin, deletePlace);
 
 module.exports = router;
