@@ -34,13 +34,22 @@ async function request(endpoint, options = {}) {
       }
     }
 
-    const data = await res.json();
+    const payload = await res.json();
 
     if (!res.ok) {
-      throw new Error(data.message || `Request failed: ${res.status}`);
+      throw new Error(payload.message || `Request failed: ${res.status}`);
     }
 
-    return data;
+    if (
+      payload &&
+      typeof payload === "object" &&
+      Object.prototype.hasOwnProperty.call(payload, "status") &&
+      Object.prototype.hasOwnProperty.call(payload, "data")
+    ) {
+      return payload.data;
+    }
+
+    return payload;
   } catch (error) {
     // Network error or JSON parse error
     if (error.message === "Network request failed") {
@@ -51,8 +60,6 @@ async function request(endpoint, options = {}) {
     throw error;
   }
 }
-
-// ── Places ───────────────────────────────────────────────────────────────────
 
 export async function fetchPlaces(categoryId) {
   const query = categoryId ? `?category=${categoryId}` : "";
@@ -82,8 +89,6 @@ export async function deletePlace(id) {
     method: "DELETE",
   });
 }
-
-// ── Categories ───────────────────────────────────────────────────────────────
 
 export async function fetchCategories() {
   return request("/categories");

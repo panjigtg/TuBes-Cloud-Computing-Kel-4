@@ -1,3 +1,5 @@
+const { sendError } = require("../utils/response");
+
 const CATEGORY_ALLOWED_FIELDS = new Set(["name", "icon_name"]);
 
 function normalizeOptionalString(value) {
@@ -10,9 +12,7 @@ function normalizeOptionalString(value) {
 
 function validateCategory(req, res, next) {
   if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
-    return res.status(400).json({
-      message: "Body JSON tidak valid",
-    });
+    return sendError(res, "Body JSON tidak valid", 400);
   }
 
   const unknownFields = Object.keys(req.body).filter(
@@ -20,8 +20,7 @@ function validateCategory(req, res, next) {
   );
 
   if (unknownFields.length > 0) {
-    return res.status(400).json({
-      message: "Field tidak diizinkan",
+    return sendError(res, "Field tidak diizinkan", 400, {
       unknown_fields: unknownFields,
     });
   }
@@ -29,24 +28,19 @@ function validateCategory(req, res, next) {
   const name = normalizeOptionalString(req.body.name);
 
   if (!name) {
-    return res.status(400).json({
-      message: "Field wajib belum lengkap",
+    return sendError(res, "Field wajib belum lengkap", 400, {
       missing_fields: ["name"],
     });
   }
 
   if (name.length > 100) {
-    return res.status(400).json({
-      message: "Nama kategori maksimal 100 karakter",
-    });
+    return sendError(res, "Nama kategori maksimal 100 karakter", 400);
   }
 
   const iconName = normalizeOptionalString(req.body.icon_name);
 
   if (iconName && iconName.length > 100) {
-    return res.status(400).json({
-      message: "Nama icon maksimal 100 karakter",
-    });
+    return sendError(res, "Nama icon maksimal 100 karakter", 400);
   }
 
   req.validatedBody = {

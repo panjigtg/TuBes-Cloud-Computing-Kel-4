@@ -1,3 +1,5 @@
+const { sendError } = require("../utils/response");
+
 const PLACE_ALLOWED_FIELDS = new Set([
   "category_id",
   "name",
@@ -32,13 +34,22 @@ function normalizeNumber(value) {
   return Number.isFinite(numberValue) ? numberValue : null;
 }
 
-function normalizePositiveInteger(value) {
-  const numberValue = normalizeNumber(value);
-  return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
-}
-
 function isValidTime(value) {
   return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(value);
+}
+
+function normalizeResourceId(value) {
+  const stringValue = String(value ?? "").trim();
+
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      stringValue
+    )
+  ) {
+    return stringValue;
+  }
+
+  return null;
 }
 
 function isValidHttpUrl(value) {
@@ -52,9 +63,7 @@ function isValidHttpUrl(value) {
 
 function validatePlacePayload(req, res, next, { partial }) {
   if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
-    return res.status(400).json({
-      message: "Body JSON tidak valid",
-    });
+    return sendError(res, "Body JSON tidak valid", 400);
   }
 
   const unknownFields = Object.keys(req.body).filter(
@@ -62,16 +71,13 @@ function validatePlacePayload(req, res, next, { partial }) {
   );
 
   if (unknownFields.length > 0) {
-    return res.status(400).json({
-      message: "Field tidak diizinkan",
+    return sendError(res, "Field tidak diizinkan", 400, {
       unknown_fields: unknownFields,
     });
   }
 
   if (partial && Object.keys(req.body).length === 0) {
-    return res.status(400).json({
-      message: "Minimal satu field harus dikirim",
-    });
+    return sendError(res, "Minimal satu field harus dikirim", 400);
   }
 
   const missingFields = partial
@@ -82,8 +88,7 @@ function validatePlacePayload(req, res, next, { partial }) {
       });
 
   if (missingFields.length > 0) {
-    return res.status(400).json({
-      message: "Field wajib belum lengkap",
+    return sendError(res, "Field wajib belum lengkap", 400, {
       missing_fields: missingFields,
     });
   }
@@ -91,11 +96,9 @@ function validatePlacePayload(req, res, next, { partial }) {
   const sanitized = {};
 
   if (req.body.category_id !== undefined) {
-    const categoryId = normalizePositiveInteger(req.body.category_id);
+    const categoryId = normalizeResourceId(req.body.category_id);
     if (!categoryId) {
-      return res.status(400).json({
-        message: "category_id harus berupa angka positif",
-      });
+      return sendError(res, "category_id harus berupa UUID", 400);
     }
     sanitized.category_id = categoryId;
   }
@@ -103,14 +106,10 @@ function validatePlacePayload(req, res, next, { partial }) {
   if (req.body.name !== undefined) {
     const name = normalizeOptionalString(req.body.name);
     if (!name) {
-      return res.status(400).json({
-        message: "Nama bengkel wajib diisi",
-      });
+      return sendError(res, "Nama bengkel wajib diisi", 400);
     }
     if (name.length > 255) {
-      return res.status(400).json({
-        message: "Nama bengkel maksimal 255 karakter",
-      });
+      return sendError(res, "Nama bengkel maksimal 255 karakter", 400);
     }
     sanitized.name = name;
   }
@@ -123,9 +122,7 @@ function validatePlacePayload(req, res, next, { partial }) {
     const max = field === "latitude" ? 90 : 180;
 
     if (value === null || value < min || value > max) {
-      return res.status(400).json({
-        message: "Koordinat latitude/longitude tidak valid",
-      });
+      return sendError(res, "Koordinat latitude/longitude tidak valid", 400);
     }
 
     sanitized[field] = value;
@@ -134,9 +131,7 @@ function validatePlacePayload(req, res, next, { partial }) {
   if (req.body.rating !== undefined) {
     const rating = normalizeNumber(req.body.rating);
     if (rating === null || rating < 0 || rating > 5) {
-      return res.status(400).json({
-        message: "Rating harus berada di antara 0 sampai 5",
-      });
+      return sendError(res, "Rating harus berada di antara 0 sampai 5", 400);
     }
     sanitized.rating = Math.round(rating * 10) / 10;
   }
@@ -152,9 +147,7 @@ function validatePlacePayload(req, res, next, { partial }) {
 
     const value = normalizeOptionalString(req.body[field]);
     if (value && value.length > maxLength) {
-      return res.status(400).json({
-        message: `${field} maksimal ${maxLength} karakter`,
-      });
+      return sendError(res, `${field} maksimal ${maxLength} karakter`, 400);
     }
     sanitized[field] = value;
   }
@@ -164,9 +157,7 @@ function validatePlacePayload(req, res, next, { partial }) {
 
     const value = normalizeOptionalString(req.body[field]);
     if (value && !isValidTime(value)) {
-      return res.status(400).json({
-        message: `${field} harus menggunakan format HH:MM`,
-      });
+      return sendError(res, `${field} harus menggunakan format HH:MM`, 400);
     }
     sanitized[field] = value;
   }
@@ -176,9 +167,7 @@ function validatePlacePayload(req, res, next, { partial }) {
 
     const value = normalizeOptionalString(req.body[field]);
     if (value && !isValidHttpUrl(value)) {
-      return res.status(400).json({
-        message: `${field} harus berupa URL http/https yang valid`,
-      });
+      return sendError(res, `${field} harus berupa URL http/https yang valid`, 400);
     }
     sanitized[field] = value;
   }

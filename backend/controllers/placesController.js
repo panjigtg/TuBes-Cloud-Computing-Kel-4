@@ -1,4 +1,5 @@
 const supabase = require("../db/supabase");
+const { sendSuccess, sendError } = require("../utils/response");
 
 // Kolom dasar yang pasti ada di tabel places
 const BASE_COLUMNS = [
@@ -88,11 +89,9 @@ async function getPlaces(req, res, next) {
       .order("name", { ascending: true });
 
     if (categoryId) {
-      const parsedCategoryId = parsePositiveInteger(categoryId);
+      const parsedCategoryId = parseResourceId(categoryId);
       if (!parsedCategoryId) {
-        return res.status(400).json({
-          message: "category harus berupa angka positif",
-        });
+        return sendError(res, "category harus berupa UUID", 400);
       }
       query = query.eq("category_id", parsedCategoryId);
     }
@@ -100,10 +99,17 @@ async function getPlaces(req, res, next) {
     const { data, error } = await query;
 
     if (error) {
+      if (isInvalidIdError(error)) {
+        return sendError(
+          res,
+          "category harus sesuai dengan tipe ID di database",
+          400
+        );
+      }
       throw error;
     }
 
-    res.json(data.map(formatPlace));
+    sendSuccess(res, "Data places berhasil ditemukan", data.map(formatPlace));
   } catch (error) {
     next(error);
   }
@@ -111,11 +117,9 @@ async function getPlaces(req, res, next) {
 
 async function getPlaceById(req, res, next) {
   try {
-    const placeId = parsePositiveInteger(req.params.id);
+    const placeId = parseResourceId(req.params.id);
     if (!placeId) {
-      return res.status(400).json({
-        message: "ID place tidak valid",
-      });
+      return sendError(res, "ID place harus berupa UUID", 400);
     }
 
     const selectStr = await buildSelect();
@@ -127,12 +131,19 @@ async function getPlaceById(req, res, next) {
 
     if (error) {
       if (error.code === "PGRST116") {
-        return res.status(404).json({ message: "Place tidak ditemukan" });
+        return sendError(res, "Place tidak ditemukan", 404);
+      }
+      if (isInvalidIdError(error)) {
+        return sendError(
+          res,
+          "ID place tidak sesuai dengan tipe ID di database",
+          400
+        );
       }
       throw error;
     }
 
-    res.json(formatPlace(data));
+    sendSuccess(res, "Data place berhasil ditemukan", formatPlace(data));
   } catch (error) {
     next(error);
   }
@@ -154,7 +165,7 @@ async function createPlace(req, res, next) {
       throw error;
     }
 
-    res.status(201).json(formatPlace(data));
+    sendSuccess(res, "Place berhasil ditambahkan", formatPlace(data), 201);
   } catch (error) {
     next(error);
   }
@@ -162,20 +173,16 @@ async function createPlace(req, res, next) {
 
 async function updatePlace(req, res, next) {
   try {
-    const placeId = parsePositiveInteger(req.params.id);
+    const placeId = parseResourceId(req.params.id);
     if (!placeId) {
-      return res.status(400).json({
-        message: "ID place tidak valid",
-      });
+      return sendError(res, "ID place harus berupa UUID", 400);
     }
 
     const cols = await detectColumns();
     const updateData = pickWritablePlaceFields(req.validatedBody ?? req.body, cols);
 
     if (Object.keys(updateData).length === 0) {
-      return res.status(400).json({
-        message: "Tidak ada field yang dapat diubah",
-      });
+      return sendError(res, "Tidak ada field yang dapat diubah", 400);
     }
 
     const selectStr = await buildSelect();
@@ -188,12 +195,19 @@ async function updatePlace(req, res, next) {
 
     if (error) {
       if (error.code === "PGRST116") {
-        return res.status(404).json({ message: "Place tidak ditemukan" });
+        return sendError(res, "Place tidak ditemukan", 404);
+      }
+      if (isInvalidIdError(error)) {
+        return sendError(
+          res,
+          "ID place tidak sesuai dengan tipe ID di database",
+          400
+        );
       }
       throw error;
     }
 
-    res.json(formatPlace(data));
+    sendSuccess(res, "Place berhasil diperbarui", formatPlace(data));
   } catch (error) {
     next(error);
   }
@@ -201,11 +215,9 @@ async function updatePlace(req, res, next) {
 
 async function deletePlace(req, res, next) {
   try {
-    const placeId = parsePositiveInteger(req.params.id);
+    const placeId = parseResourceId(req.params.id);
     if (!placeId) {
-      return res.status(400).json({
-        message: "ID place tidak valid",
-      });
+      return sendError(res, "ID place harus berupa UUID", 400);
     }
 
     const { data: existingPlace, error: findError } = await supabase
@@ -216,13 +228,20 @@ async function deletePlace(req, res, next) {
 
     if (findError) {
       if (findError.code === "PGRST116") {
-        return res.status(404).json({ message: "Place tidak ditemukan" });
+        return sendError(res, "Place tidak ditemukan", 404);
+      }
+      if (isInvalidIdError(findError)) {
+        return sendError(
+          res,
+          "ID place tidak sesuai dengan tipe ID di database",
+          400
+        );
       }
       throw findError;
     }
 
     if (!existingPlace) {
-      return res.status(404).json({ message: "Place tidak ditemukan" });
+      return sendError(res, "Place tidak ditemukan", 404);
     }
 
     const { error } = await supabase
@@ -234,7 +253,7 @@ async function deletePlace(req, res, next) {
       throw error;
     }
 
-    res.json({ message: "Place berhasil dihapus" });
+    sendSuccess(res, "Place berhasil dihapus", null);
   } catch (error) {
     next(error);
   }
@@ -261,9 +280,22 @@ function formatPlace(place) {
   };
 }
 
-function parsePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+function parseResourceId(value) {
+  const stringValue = String(value ?? "").trim();
+
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      stringValue
+    )
+  ) {
+    return stringValue;
+  }
+
+  return null;
+}
+
+function isInvalidIdError(error) {
+  return error?.code === "22P02";
 }
 
 function pickWritablePlaceFields(body, availableDbColumns) {

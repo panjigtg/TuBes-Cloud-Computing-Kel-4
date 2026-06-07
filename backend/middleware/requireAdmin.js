@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { sendError } = require("../utils/response");
 
 function safeCompare(value, expected) {
   const valueBuffer = Buffer.from(value);
@@ -15,17 +16,13 @@ function requireAdmin(req, res, next) {
   const configuredKey = process.env.ADMIN_API_KEY;
 
   if (!configuredKey) {
-    return res.status(500).json({
-      message: "Konfigurasi admin API belum tersedia",
-    });
+    return sendError(res, "Konfigurasi admin API belum tersedia", 500);
   }
 
   const providedKey = req.get("x-admin-api-key");
 
   if (!providedKey || !safeCompare(providedKey, configuredKey)) {
-    return res.status(401).json({
-      message: "Admin API key tidak valid",
-    });
+    return sendError(res, "Admin API key tidak valid", 401);
   }
 
   req.admin = true;

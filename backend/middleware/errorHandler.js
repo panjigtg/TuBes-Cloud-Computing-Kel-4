@@ -1,9 +1,9 @@
+const { sendError } = require("../utils/response");
+
 function errorHandler(error, _req, res, _next) {
   console.error(error);
 
-  res.status(500).json({
-    message: "Terjadi kesalahan pada server",
-  });
+  sendError(res, "Terjadi kesalahan pada server", 500);
 }
 
 module.exports = errorHandler;

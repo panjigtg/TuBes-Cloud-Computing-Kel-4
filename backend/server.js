@@ -6,6 +6,7 @@ const cors = require("cors");
 const placesRoutes = require("./routes/places");
 const categoriesRoutes = require("./routes/categories");
 const errorHandler = require("./middleware/errorHandler");
+const { sendSuccess, sendError } = require("./utils/response");
 
 const app = express();
 const PORT = process.env.PORT || 3022;
@@ -14,8 +15,8 @@ app.use(cors());
 app.use(express.json());
 
 app.get("/", (_req, res) => {
-  res.json({
-    message: "Direktori Bengkel API is running",
+  sendSuccess(res, "Direktori Bengkel API is running", {
+    service: "direktori-bengkel-api",
   });
 });
 
@@ -25,9 +26,7 @@ app.use("/api/categories", categoriesRoutes);
 
 // 404 catch-all — must be AFTER all routes
 app.use((_req, res) => {
-  res.status(404).json({
-    message: "Endpoint tidak ditemukan",
-  });
+  sendError(res, "Endpoint tidak ditemukan", 404);
 });
 
 // Error handler
