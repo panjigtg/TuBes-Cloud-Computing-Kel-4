@@ -21,12 +21,13 @@ import { fetchPlaces as apiFetchPlaces, fetchCategories as apiFetchCategories } 
 import { getDistanceFromLatLonInMeters, formatDistance } from '../utils/distance';
 import { getCategoryIcon, getCategoryColor } from '../utils/icons';
 import { colors, radius, shadow, mapStyle } from '../theme';
+import { supabase } from '../lib/supabase';
 import BengkelMarker from '../components/BengkelMarker';
 
 const { height } = Dimensions.get('window');
 
 // ─── Bottom sheet snap positions ─────────────────────────────────────────────
-const SNAP_COLLAPSED = height - 100;
+const SNAP_COLLAPSED = height - 140;
 const SNAP_HALF      = height * 0.52;
 
 function nearestSnap(value, snapExpanded) {
@@ -488,7 +489,17 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
 
           {/* Dashboard tab */}
-          <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Login')}>
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={async () => {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (session) {
+                navigation.navigate('AdminDashboard');
+              } else {
+                navigation.navigate('Login');
+              }
+            }}
+          >
             <MaterialCommunityIcons name="shield-account" size={26} color={colors.textMuted} />
             <Text style={styles.navLabel}>Dashboard</Text>
           </TouchableOpacity>

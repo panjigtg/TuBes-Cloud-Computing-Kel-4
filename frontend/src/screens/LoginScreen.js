@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   Platform,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -18,13 +19,49 @@ import { colors, radius, shadow } from '../theme';
 
 export default function LoginScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const scrollViewRef = useRef(null);
   const [email, setEmail]             = useState('');
   const [password, setPassword]       = useState('');
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [emailFocused, setEmailFocused] = useState(false);
-  const [passFocused, setPassFocused]   = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  // ── Session check on mount ────────────────────────────────────────────────
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        navigation.replace('AdminDashboard');
+      }
+    });
+  }, []);
+
+  // ── Keyboard listeners for Android & iOS ──────────────────────────────────
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  // Auto-scroll form upward on focus
+  const handleFocus = () => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: 120, animated: true });
+    }, 80);
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -52,7 +89,7 @@ export default function LoginScreen({ navigation }) {
   return (
     <KeyboardAvoidingView
       style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <StatusBar barStyle="dark-content" backgroundColor={colors.bgBase} />
 
@@ -66,130 +103,122 @@ export default function LoginScreen({ navigation }) {
       </TouchableOpacity>
 
       <ScrollView
+        ref={scrollViewRef}
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: insets.top + 64, paddingBottom: insets.bottom + 32 },
+          { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 20 : insets.bottom + 32 }
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Brand block ── */}
-        <View style={styles.brandBlock}>
-          <View style={styles.iconRing}>
-            <MaterialCommunityIcons
-              name="shield-key"
-              size={30}
-              color={colors.primary}
-            />
-          </View>
-          <Text style={styles.appName}>Bengkel Map</Text>
-          <Text style={styles.headline}>Masuk ke Admin Panel</Text>
-          <Text style={styles.subline}>
-            Kelola direktori bengkel dari satu tempat
-          </Text>
-        </View>
-
-        {/* ── Form card ── */}
-        <View style={styles.card}>
-          {/* Error banner */}
-          {error ? (
-            <View style={styles.errorBanner}>
+        <View style={[styles.scrollInner, { paddingTop: insets.top + 32 }]}>
+          {/* ── Brand block ── */}
+          <View style={styles.brandBlock}>
+            <View style={styles.iconRing}>
               <MaterialCommunityIcons
-                name="alert-circle-outline"
-                size={16}
-                color={colors.danger}
-              />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          {/* Email field */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Email</Text>
-            <View
-              style={[
-                styles.inputWrap,
-                emailFocused && styles.inputWrapFocused,
-              ]}
-            >
-              <MaterialCommunityIcons
-                name="email-outline"
-                size={18}
-                color={emailFocused ? colors.primary : colors.textMuted}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="nama@email.com"
-                placeholderTextColor={colors.textMuted}
-                value={email}
-                onChangeText={(v) => { setEmail(v); setError(''); }}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                onFocus={() => setEmailFocused(true)}
-                onBlur={() => setEmailFocused(false)}
+                name="shield-key"
+                size={32}
+                color={colors.primary}
               />
             </View>
+            <Text style={styles.appName}>Bengkel Map</Text>
+            <Text style={styles.headline}>Masuk ke Admin Panel</Text>
+            <Text style={styles.subline}>
+              Kelola direktori bengkel dari satu tempat
+            </Text>
           </View>
 
-          {/* Password field */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Password</Text>
-            <View
-              style={[
-                styles.inputWrap,
-                passFocused && styles.inputWrapFocused,
-              ]}
-            >
-              <MaterialCommunityIcons
-                name="lock-outline"
-                size={18}
-                color={passFocused ? colors.primary : colors.textMuted}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="••••••••"
-                placeholderTextColor={colors.textMuted}
-                value={password}
-                onChangeText={(v) => { setPassword(v); setError(''); }}
-                secureTextEntry={!showPassword}
-                onFocus={() => setPassFocused(true)}
-                onBlur={() => setPassFocused(false)}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword((p) => !p)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
+          {/* ── Form card ── */}
+          <View style={styles.card}>
+            {/* Error banner */}
+            {error ? (
+              <View style={styles.errorBanner}>
                 <MaterialCommunityIcons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  name="alert-circle-outline"
+                  size={16}
+                  color={colors.danger}
+                />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
+            {/* Email field */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Email</Text>
+              <View style={styles.inputWrap}>
+                <MaterialCommunityIcons
+                  name="email-outline"
                   size={18}
                   color={colors.textMuted}
+                  style={styles.inputIcon}
                 />
-              </TouchableOpacity>
+                <TextInput
+                  style={styles.input}
+                  placeholder="nama@email.com"
+                  placeholderTextColor={colors.textMuted}
+                  value={email}
+                  onChangeText={(v) => { setEmail(v); setError(''); }}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onFocus={handleFocus}
+                />
+              </View>
             </View>
+
+            {/* Password field */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Password</Text>
+              <View style={styles.inputWrap}>
+                <MaterialCommunityIcons
+                  name="lock-outline"
+                  size={18}
+                  color={colors.textMuted}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="••••••••"
+                  placeholderTextColor={colors.textMuted}
+                  value={password}
+                  onChangeText={(v) => { setPassword(v); setError(''); }}
+                  secureTextEntry={!showPassword}
+                  onFocus={handleFocus}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword((p) => !p)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.eyeBtn}
+                >
+                  <MaterialCommunityIcons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={18}
+                    color={colors.textMuted}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Submit button */}
+            <TouchableOpacity
+              style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              {loading ? (
+                <ActivityIndicator color={colors.white} size="small" />
+              ) : (
+                <Text style={styles.submitText}>Masuk</Text>
+              )}
+            </TouchableOpacity>
           </View>
 
-          {/* Submit button */}
-          <TouchableOpacity
-            style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <ActivityIndicator color={colors.white} size="small" />
-            ) : (
-              <Text style={styles.submitText}>Masuk</Text>
-            )}
-          </TouchableOpacity>
+          {/* Footer note */}
+          <Text style={styles.footer}>
+            Akses terbatas untuk administrator
+          </Text>
         </View>
-
-        {/* Footer note */}
-        <Text style={styles.footer}>
-          Akses terbatas untuk administrator
-        </Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -217,10 +246,11 @@ const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: 24,
     flexGrow: 1,
+  },
+  scrollInner: {
+    flexGrow: 1,
     justifyContent: 'center',
   },
-
-  // ── Brand ──────────────────────────────────────────────────────────────────
   brandBlock: {
     alignItems: 'center',
     marginBottom: 32,
@@ -258,8 +288,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-
-  // ── Card ───────────────────────────────────────────────────────────────────
   card: {
     backgroundColor: colors.bgSurface,
     borderRadius: radius.xl,
@@ -268,8 +296,6 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSubtle,
     ...shadow.medium,
   },
-
-  // ── Error banner ───────────────────────────────────────────────────────────
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -288,34 +314,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-
-  // ── Fields ─────────────────────────────────────────────────────────────────
   fieldGroup: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   fieldLabel: {
     fontSize: 13,
     fontWeight: '600',
     color: colors.textSecondary,
-    marginBottom: 7,
+    marginBottom: 8,
     letterSpacing: 0.1,
   },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.bgBase,
+    backgroundColor: colors.bgSurface,
     borderRadius: radius.md,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: colors.borderMedium,
     paddingHorizontal: 14,
-    height: 50,
-  },
-  inputWrapFocused: {
-    borderColor: colors.primary,
-    backgroundColor: colors.bgSurface,
-    ...shadow.colored(colors.primary),
-    shadowOpacity: 0.08,
-    elevation: 2,
   },
   inputIcon: {
     marginRight: 10,
@@ -324,17 +340,19 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.textPrimary,
     fontSize: 15,
-    paddingVertical: 0,
+    paddingVertical: 14,
   },
-
-  // ── Submit ─────────────────────────────────────────────────────────────────
+  eyeBtn: {
+    padding: 4,
+    marginLeft: 6,
+  },
   submitBtn: {
     backgroundColor: colors.primary,
     borderRadius: radius.md,
     height: 52,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 10,
     ...shadow.colored(colors.primary),
   },
   submitBtnDisabled: {
@@ -346,8 +364,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.2,
   },
-
-  // ── Footer ─────────────────────────────────────────────────────────────────
   footer: {
     textAlign: 'center',
     color: colors.textMuted,
