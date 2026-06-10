@@ -7,23 +7,39 @@
  *   - Storage (upload foto)
  */
 
-import { Platform } from 'react-native';
+import { supabase } from "../lib/supabase";
 
 // Production (Vercel)
 const API_BASE_URL = "https://bengkelbrainrot.vercel.app/api";
 // Ganti dengan URL ini saat production (setelah deploy ke Render):
 // const API_BASE_URL = "https://your-render-url.onrender.com/api";
 
+async function getAuthHeaders() {
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+
+  if (!token) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+}
+
 async function request(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
 
   try {
+    const authHeaders = await getAuthHeaders();
+
     const res = await fetch(url, {
+      ...options,
       headers: {
         "Content-Type": "application/json",
+        ...authHeaders,
         ...options.headers,
       },
-      ...options,
     });
 
     // Handle non-JSON errors (e.g. 502 from proxy)

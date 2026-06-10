@@ -14,21 +14,29 @@ import {
   PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from '../components/MapComponents';
 import * as Location from 'expo-location';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { fetchPlaces as apiFetchPlaces, fetchCategories as apiFetchCategories } from '../services/api';
 import { getDistanceFromLatLonInMeters, formatDistance } from '../utils/distance';
 import { getCategoryIcon, getCategoryColor } from '../utils/icons';
-import { colors, radius, shadow, mapStyle } from '../theme';
+import { colors, radius, shadow } from '../theme';
 import { supabase } from '../lib/supabase';
 import BengkelMarker from '../components/BengkelMarker';
 
-const { height } = Dimensions.get('window');
+const { height, width } = Dimensions.get('window');
+const IS_COMPACT = width < 380 || height < 720;
 
-// ─── Bottom sheet snap positions ─────────────────────────────────────────────
-const SNAP_COLLAPSED = height - 140;
-const SNAP_HALF      = height * 0.52;
+const SEARCH_H = IS_COMPACT ? 48 : 52;
+const CHIP_H = IS_COMPACT ? 38 : 42;
+const MAP_CONTROL_SIZE = IS_COMPACT ? 42 : 46;
+const MAP_CONTROL_ICON_SIZE = IS_COMPACT ? 20 : 22;
+const NAV_ICON_SIZE = IS_COMPACT ? 22 : 24;
+const SHEET_X = IS_COMPACT ? 18 : 20;
+const THUMB_SIZE = IS_COMPACT ? 48 : 54;
+
+const SNAP_COLLAPSED = height - (IS_COMPACT ? 154 : 172);
+const SNAP_HALF      = height * (IS_COMPACT ? 0.66 : 0.64);
 
 function nearestSnap(value, snapExpanded) {
   const snaps = [SNAP_COLLAPSED, SNAP_HALF, snapExpanded];
@@ -38,17 +46,15 @@ function nearestSnap(value, snapExpanded) {
 }
 
 // Bottom nav bar height (used for spacing calculations)
-const BOTTOM_NAV_H = 88;
+const BOTTOM_NAV_H = IS_COMPACT ? 74 : 80;
 // My location FAB size
-const FAB_SIZE = 48;
 // Gap between FAB and sheet handle — kecilkan agar lebih dekat
-const FAB_GAP = 4;
+const MAP_TOOLS_BOTTOM = height - SNAP_HALF + (IS_COMPACT ? 18 : 24);
 
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
 
-  // SNAP_EXPANDED: sheet top stops just below filter chips
-  const SNAP_EXPANDED = insets.top + 48 + 8 + 40 + 20;
+  const SNAP_EXPANDED = insets.top + SEARCH_H + CHIP_H + (IS_COMPACT ? 32 : 38);
 
   const [location, setLocation]               = useState(null);
   const [places, setPlaces]                   = useState([]);
@@ -57,6 +63,7 @@ export default function HomeScreen({ navigation }) {
   const [loading, setLoading]                 = useState(true);
   const [locationDenied, setLocationDenied]   = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [mapType, setMapType]                 = useState('standard');
   const [sheetState, setSheetState]           = useState('half');
   const [markersReady, setMarkersReady]       = useState(false);
   const mapRef   = useRef(null);
@@ -64,21 +71,6 @@ export default function HomeScreen({ navigation }) {
   const sheetY   = useRef(new Animated.Value(SNAP_HALF)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // FAB translateY: posisikan FAB tepat di atas handle sheet.
-  // Sheet berada di translateY = sheetY, artinya top edge sheet ada di sheetY dari atas layar.
-  // Kita ingin FAB bottom = sheetY - FAB_GAP, dari atas layar.
-  // FAB di-anchor bottom:0, jadi translateY = -(height - sheetY + FAB_GAP + FAB_SIZE)
-  const fabTranslateY = sheetY.interpolate({
-    inputRange:  [SNAP_EXPANDED, SNAP_HALF, SNAP_COLLAPSED],
-    outputRange: [
-      -(height - SNAP_EXPANDED  + FAB_GAP + FAB_SIZE),
-      -(height - SNAP_HALF      + FAB_GAP + FAB_SIZE),
-      -(height - SNAP_COLLAPSED + FAB_GAP + FAB_SIZE),
-    ],
-    extrapolate: 'clamp',
-  });
-
-  // ─── PanResponder ─────────────────────────────────────────────────────────
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 6,
@@ -230,6 +222,11 @@ export default function HomeScreen({ navigation }) {
 
   const isCollapsed = sheetState === 'collapsed';
 
+  const goToAdmin = async () => {
+    const { data } = await supabase.auth.getSession();
+    navigation.navigate(data?.session ? 'AdminDashboard' : 'Login');
+  };
+
   // ─── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -260,8 +257,8 @@ export default function HomeScreen({ navigation }) {
 
   // ─── Layout ───────────────────────────────────────────────────────────────
   const safeTop      = insets.top;
-  const searchBarTop = safeTop + 12;
-  const filterRowTop = searchBarTop + 48 + 8;
+  const searchBarTop = safeTop + (IS_COMPACT ? 8 : 10);
+  const filterRowTop = searchBarTop + SEARCH_H + (IS_COMPACT ? 8 : 10);
   const safeBottom   = insets.bottom;
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -274,7 +271,7 @@ export default function HomeScreen({ navigation }) {
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_GOOGLE}
-        customMapStyle={mapStyle}
+        mapType={mapType}
         initialRegion={{
           latitude:      location?.latitude  || -6.2,
           longitude:     location?.longitude || 106.816666,
@@ -307,17 +304,30 @@ export default function HomeScreen({ navigation }) {
       {/* ── Search bar ── */}
       <View style={[styles.searchBar, { top: searchBarTop }]}>
         <View style={styles.searchInner}>
-          <Ionicons name="search" size={18} color={colors.textSecondary} style={styles.searchIcon} />
+          <MaterialCommunityIcons
+            name="map-marker-radius"
+            size={IS_COMPACT ? 24 : 26}
+            color="#4285F4"
+            style={styles.searchIcon}
+          />
           <TextInput
             style={styles.searchInput}
-            placeholder="Cari bengkel..."
+            placeholder="Telusuri bengkel di sini"
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
-          {searchQuery.length > 0 && (
+          {searchQuery.length > 0 ? (
             <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+              <Ionicons name="close-circle" size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.searchManageButton}
+              onPress={goToAdmin}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.searchManageText}>Kelola</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -331,35 +341,40 @@ export default function HomeScreen({ navigation }) {
           showsHorizontalScrollIndicator={false}
           keyExtractor={(item) => item.id || 'all'}
           contentContainerStyle={styles.filterList}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.chip, selectedCategory === item.id && styles.chipActive]}
-              onPress={() => setSelectedCategory(item.id)}
-            >
-              <MaterialCommunityIcons
-                name={item.icon_name === 'apps' ? 'apps' : getCategoryIcon(item.icon_name)}
-                size={14}
-                color={selectedCategory === item.id ? colors.textInverse : colors.textSecondary}
-              />
-              <Text style={[styles.chipText, selectedCategory === item.id && styles.chipTextActive]}>
-                {item.name}
-              </Text>
-            </TouchableOpacity>
-          )}
+          renderItem={({ item }) => {
+            const isActive = selectedCategory === item.id;
+            return (
+              <TouchableOpacity
+                style={[styles.chip, isActive && styles.chipActive]}
+                onPress={() => setSelectedCategory(item.id)}
+              >
+                <MaterialCommunityIcons
+                  name={item.icon_name === 'apps' ? 'home' : getCategoryIcon(item.icon_name)}
+                  size={IS_COMPACT ? 17 : 18}
+                  color={isActive ? colors.textPrimary : colors.textSecondary}
+                />
+                <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
+                  {item.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
         />
       </Animated.View>
 
       {/* ── My Location FAB — follows sheet position ── */}
-      <Animated.View
-        style={[
-          styles.fabWrap,
-          { right: 16, transform: [{ translateY: fabTranslateY }] },
-        ]}
-      >
-        <TouchableOpacity style={styles.fabBtn} onPress={goToMyLocation}>
-          <MaterialCommunityIcons name="crosshairs-gps" size={22} color={colors.primary} />
+      <View style={[styles.mapControls, { right: 16 }]}>
+        <TouchableOpacity
+          style={styles.mapControlBtn}
+          onPress={() => setMapType((current) => current === 'standard' ? 'satellite' : 'standard')}
+          activeOpacity={0.85}
+        >
+          <MaterialCommunityIcons name="layers-outline" size={MAP_CONTROL_ICON_SIZE} color={colors.textPrimary} />
         </TouchableOpacity>
-      </Animated.View>
+        <TouchableOpacity style={styles.mapControlBtn} onPress={goToMyLocation} activeOpacity={0.85}>
+          <MaterialCommunityIcons name="crosshairs-gps" size={MAP_CONTROL_ICON_SIZE} color={colors.textPrimary} />
+        </TouchableOpacity>
+      </View>
 
       {/* ── Bottom sheet ── */}
       <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetY }] }]}>
@@ -383,17 +398,22 @@ export default function HomeScreen({ navigation }) {
                 style={styles.openListBtn}
                 onPress={() => animateToSnap(SNAP_HALF)}
               >
-                <MaterialCommunityIcons name="format-list-bulleted" size={16} color={colors.primary} />
-                <Text style={styles.openListText}>
-                  {'Daftar Bengkel (' + filteredPlaces.length + ')'}
-                </Text>
-                <MaterialCommunityIcons name="chevron-up" size={16} color={colors.primary} />
+                <View>
+                  <Text style={styles.sheetTitle}>Bengkel terdekat</Text>
+                  <Text style={styles.resultCount}>
+                    {filteredPlaces.length + ' bengkel ditemukan'}
+                  </Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-up" size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             ) : (
               <>
-                <Text style={styles.resultCount}>
-                  {filteredPlaces.length + ' bengkel ditemukan'}
-                </Text>
+                <View>
+                  <Text style={styles.sheetTitle}>Bengkel terdekat</Text>
+                  <Text style={styles.resultCount}>
+                    {filteredPlaces.length + ' bengkel ditemukan'}
+                  </Text>
+                </View>
                 <TouchableOpacity
                   style={styles.closeBtn}
                   onPress={() => animateToSnap(SNAP_COLLAPSED)}
@@ -438,7 +458,7 @@ export default function HomeScreen({ navigation }) {
                       <View style={[styles.cardThumbPlaceholder, { backgroundColor: getCategoryColor(item.categories?.icon_name) + '25' }]}>
                         <MaterialCommunityIcons
                           name={getCategoryIcon(item.categories?.icon_name)}
-                          size={26}
+                          size={IS_COMPACT ? 22 : 24}
                           color={getCategoryColor(item.categories?.icon_name)}
                         />
                       </View>
@@ -480,28 +500,22 @@ export default function HomeScreen({ navigation }) {
           <TouchableOpacity style={styles.navItem} onPress={() => animateToSnap(SNAP_HALF)}>
             <MaterialCommunityIcons
               name="map-search"
-              size={26}
+              size={NAV_ICON_SIZE}
               color={sheetState !== 'collapsed' ? colors.primary : colors.textMuted}
             />
             <Text style={[styles.navLabel, sheetState !== 'collapsed' && styles.navLabelActive]}>
-              Explore
+              Jelajahi
             </Text>
           </TouchableOpacity>
 
-          {/* Dashboard tab */}
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={async () => {
-              const { data: { session } } = await supabase.auth.getSession();
-              if (session) {
-                navigation.navigate('AdminDashboard');
-              } else {
-                navigation.navigate('Login');
-              }
-            }}
-          >
-            <MaterialCommunityIcons name="shield-account" size={26} color={colors.textMuted} />
-            <Text style={styles.navLabel}>Dashboard</Text>
+          <TouchableOpacity style={styles.navItem} onPress={() => animateToSnap(SNAP_EXPANDED)}>
+            <MaterialCommunityIcons name="store-search" size={NAV_ICON_SIZE} color={colors.textMuted} />
+            <Text style={styles.navLabel}>Daftar</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.navItem} onPress={goToMyLocation}>
+            <MaterialCommunityIcons name="crosshairs-gps" size={NAV_ICON_SIZE} color={colors.textMuted} />
+            <Text style={styles.navLabel}>Lokasi</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -532,48 +546,59 @@ const styles = StyleSheet.create({
     ...shadow.colored(colors.primary),
   },
   retryButtonText: { color: colors.textInverse, fontSize: 16, fontWeight: '700' },
-
   // ── Search bar ────────────────────────────────────────────────────────────
   searchBar: {
-    position: 'absolute', left: 16, right: 16, zIndex: 30, height: 48,
+    position: 'absolute', left: SHEET_X, right: SHEET_X, zIndex: 40, height: SEARCH_H,
     justifyContent: 'center',
   },
   searchInner: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.bgOverlay,
-    borderRadius: radius.lg, paddingHorizontal: 14, height: '100%',
-    borderWidth: 1, borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgSurface,
+    borderRadius: SEARCH_H / 2, paddingLeft: IS_COMPACT ? 11 : 12, paddingRight: 6, height: '100%',
     ...shadow.medium,
   },
-  searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, color: colors.textPrimary, fontSize: 15, paddingVertical: 0 },
+  searchIcon: { marginRight: IS_COMPACT ? 8 : 10 },
+  searchInput: { flex: 1, color: colors.textPrimary, fontSize: IS_COMPACT ? 14 : 15, paddingVertical: 0 },
+  searchManageButton: {
+    height: IS_COMPACT ? 32 : 34,
+    paddingHorizontal: IS_COMPACT ? 10 : 12,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgMuted,
+  },
+  searchManageText: {
+    color: colors.textPrimary,
+    fontSize: IS_COMPACT ? 12 : 13,
+    fontWeight: '700',
+  },
 
   // ── Filter chips ──────────────────────────────────────────────────────────
-  filterRow: { position: 'absolute', left: 0, right: 0, zIndex: 25 },
-  filterList: { paddingHorizontal: 16, paddingVertical: 4 },
+  filterRow: { position: 'absolute', left: 0, right: 0, zIndex: 35 },
+  filterList: { paddingHorizontal: SHEET_X, paddingVertical: 3 },
   chip: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.bgOverlay,
-    paddingHorizontal: 11, paddingVertical: 7,
-    borderRadius: radius.full, marginRight: 8,
-    borderWidth: 1, borderColor: colors.borderSubtle,
-    ...shadow.low,
+    backgroundColor: colors.bgSurface,
+    paddingHorizontal: IS_COMPACT ? 12 : 14, height: CHIP_H,
+    borderRadius: CHIP_H / 2, marginRight: 8,
+    borderWidth: 1, borderColor: 'rgba(15,23,42,0.08)',
+    ...shadow.medium,
   },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.textSecondary, fontSize: 12, marginLeft: 5, fontWeight: '500' },
-  chipTextActive: { color: colors.textInverse, fontWeight: '600' },
+  chipActive: { borderColor: 'rgba(66,133,244,0.55)' },
+  chipText: { color: colors.textSecondary, fontSize: IS_COMPACT ? 12 : 13, marginLeft: 7, fontWeight: '600' },
+  chipTextActive: { color: colors.textPrimary, fontWeight: '700' },
 
   // ── My Location FAB ───────────────────────────────────────────────────────
-  fabWrap: {
+  mapControls: {
     position: 'absolute',
-    bottom: 0,   // anchor point; translateY moves it up from here
-    zIndex: 30,
+    bottom: MAP_TOOLS_BOTTOM,
+    zIndex: 18,
+    gap: IS_COMPACT ? 8 : 10,
   },
-  fabBtn: {
-    width: FAB_SIZE, height: FAB_SIZE, borderRadius: radius.md,
+  mapControlBtn: {
+    width: MAP_CONTROL_SIZE, height: MAP_CONTROL_SIZE, borderRadius: MAP_CONTROL_SIZE / 2,
     backgroundColor: colors.bgSurface,
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: colors.borderSubtle,
     ...shadow.medium,
   },
 
@@ -582,29 +607,34 @@ const styles = StyleSheet.create({
     position: 'absolute', left: 0, right: 0, top: 0,
     height: height + 200,
     backgroundColor: colors.bgSurface,
-    borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl,
-    ...shadow.high, shadowOffset: { width: 0, height: -4 },
+    borderTopLeftRadius: IS_COMPACT ? 22 : 24, borderTopRightRadius: IS_COMPACT ? 22 : 24,
+    ...shadow.high, shadowOffset: { width: 0, height: -3 },
     zIndex: 20,
   },
 
   // ── Handle ────────────────────────────────────────────────────────────────
-  handleArea: { paddingTop: 10, paddingHorizontal: 16, paddingBottom: 8 },
+  handleArea: { paddingTop: IS_COMPACT ? 9 : 10, paddingHorizontal: SHEET_X, paddingBottom: IS_COMPACT ? 9 : 10 },
   handleBar: {
-    width: 40, height: 4, backgroundColor: colors.textMuted,
-    borderRadius: 2, alignSelf: 'center', marginBottom: 10,
+    width: 42, height: 4, backgroundColor: '#D1D5DB',
+    borderRadius: 999, alignSelf: 'center', marginBottom: IS_COMPACT ? 10 : 12,
   },
   handleRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
-  resultCount: { color: colors.textSecondary, fontSize: 13, fontWeight: '500' },
+  sheetTitle: {
+    color: colors.textPrimary,
+    fontSize: IS_COMPACT ? 20 : 22,
+    fontWeight: '700',
+  },
+  resultCount: { color: colors.textSecondary, fontSize: IS_COMPACT ? 12 : 13, fontWeight: '500', marginTop: 2 },
   closeBtn: {
-    width: 28, height: 28, borderRadius: 14,
+    width: IS_COMPACT ? 30 : 32, height: IS_COMPACT ? 30 : 32, borderRadius: 16,
     backgroundColor: colors.bgMuted,
     justifyContent: 'center', alignItems: 'center',
   },
   openListBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'center', gap: 8, paddingVertical: 4,
+    justifyContent: 'space-between', paddingVertical: 2,
   },
   openListText: { color: colors.primary, fontSize: 14, fontWeight: '600' },
 
@@ -614,29 +644,29 @@ const styles = StyleSheet.create({
   emptySubtitle: { color: colors.textMuted, fontSize: 13, marginTop: 6, textAlign: 'center' },
 
   // ── Card list ─────────────────────────────────────────────────────────────
-  listContent: { paddingHorizontal: 16, paddingBottom: 16 },
+  listContent: { paddingHorizontal: 0, paddingBottom: BOTTOM_NAV_H + 18 },
   card: {
-    backgroundColor: colors.bgSurface, borderRadius: radius.lg,
-    marginBottom: 10, borderWidth: 1, borderColor: colors.borderSubtle,
-    overflow: 'hidden',
+    backgroundColor: colors.bgSurface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
   },
-  cardRow: { flexDirection: 'row', alignItems: 'center', padding: 12 },
-  cardThumb: { width: 60, height: 60, borderRadius: radius.md },
+  cardRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SHEET_X, paddingVertical: IS_COMPACT ? 10 : 12 },
+  cardThumb: { width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: 11 },
   cardThumbPlaceholder: {
-    width: 60, height: 60, borderRadius: radius.md,
+    width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: 11,
     justifyContent: 'center', alignItems: 'center',
   },
   cardInfo: { flex: 1, marginLeft: 12 },
-  cardName: { color: colors.textPrimary, fontSize: 15, fontWeight: '700' },
-  cardBadgeRow: { flexDirection: 'row', marginTop: 4 },
+  cardName: { color: colors.textPrimary, fontSize: IS_COMPACT ? 14 : 15, fontWeight: '700' },
+  cardBadgeRow: { flexDirection: 'row', marginTop: 3 },
   badge: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 7, paddingVertical: 3, borderRadius: radius.sm,
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm,
   },
-  badgeText: { fontSize: 11, fontWeight: '600', marginLeft: 4 },
-  cardDesc: { color: colors.textSecondary, fontSize: 12, marginTop: 4, lineHeight: 16 },
-  cardDist: { alignItems: 'center', marginLeft: 8, minWidth: 44 },
-  distText: { color: colors.primary, fontSize: 12, fontWeight: '700', marginTop: 3, textAlign: 'center' },
+  badgeText: { fontSize: IS_COMPACT ? 10 : 11, fontWeight: '600', marginLeft: 4 },
+  cardDesc: { color: colors.textSecondary, fontSize: IS_COMPACT ? 11 : 12, marginTop: 3, lineHeight: IS_COMPACT ? 14 : 16 },
+  cardDist: { alignItems: 'center', marginLeft: 8, minWidth: IS_COMPACT ? 38 : 42 },
+  distText: { color: colors.primary, fontSize: IS_COMPACT ? 11 : 12, fontWeight: '700', marginTop: 2, textAlign: 'center' },
 
   // ── Bottom Nav Bar ────────────────────────────────────────────────────────
   bottomNav: {
@@ -647,10 +677,11 @@ const styles = StyleSheet.create({
   },
   navItem: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 14,
+    paddingTop: IS_COMPACT ? 8 : 9,
+    paddingBottom: IS_COMPACT ? 7 : 8,
   },
   navLabel: {
-    fontSize: 12, fontWeight: '500', color: colors.textMuted, marginTop: 4,
+    fontSize: IS_COMPACT ? 11 : 12, fontWeight: '500', color: colors.textMuted, marginTop: 4,
   },
   navLabelActive: {
     color: colors.primary, fontWeight: '700',

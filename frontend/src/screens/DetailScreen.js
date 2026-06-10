@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
   Linking,
 } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '../components/MapComponents';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { getDistanceFromLatLonInMeters, formatDistance } from '../utils/distance';
 import { getCategoryIcon, getCategoryColor } from '../utils/icons';
